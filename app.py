@@ -42,10 +42,9 @@ st.sidebar.header("Настройки")
 confidence = st.sidebar.slider("Порог уверенности (Confidence)", 0.0, 1.0, 0.25)
 
 # --- Загрузка модели ---
-# Используем кэширование, чтобы не грузить модель при каждом клике
+# Используем кэширование
 @st.cache_resource
 def load_model():
-    # Загружаем твои обученные веса
     model = YOLO('yolov8m.pt') 
     return model
 
@@ -79,7 +78,6 @@ if source_type == "Изображение":
             res_plotted = results[0].plot() # Рисует боксы на картинке
             
             # Подсчет статистики
-            # results[0].boxes.cls - это массив классов. Считаем длину.
             obj_count = len(results[0].boxes)
             
             with col2:
@@ -88,19 +86,14 @@ if source_type == "Изображение":
             # Вывод статистики
             st.metric(label="Обнаружено объектов", value=obj_count)
             
-            # (Заготовка под JSON/БД для отчета)
             st.success(f"Обработка завершена. Найдено: {obj_count}")
             
-            # Считаем конкретные типы для статистики
             cls_list = results[0].boxes.cls.cpu().numpy() # Получаем ID найденных классов
             num_bikes = int((cls_list == 1).sum())        # ID 1 - велосипед
             num_cars = int((cls_list == 2).sum())         # ID 2 - машина
 
-            # (Упрощенно для примера, если лень парсить классы, пишем общее)
             save_to_db(obj_count, num_bikes, num_cars) 
-            # st.toast("Результат сохранен в историю!") # Всплывающее уведомление
 
-# --- Логика для ВИДЕО ---
 # --- Логика для ВИДЕО ---
 elif source_type == "Видео":
     uploaded_video = st.sidebar.file_uploader("Загрузить видео", type=['mp4', 'avi', 'mov'])
@@ -117,7 +110,6 @@ elif source_type == "Видео":
         st_frame = st.empty()
         st_stat = st.empty()
         
-        # 2. ЗАМЕНА: Вместо кнопки используем Чекбокс (Toggle)
         # Это работает как ПАУЗА / СТОП
         run_processing = st.sidebar.checkbox("Запустить обработку", value=False)
         
@@ -128,15 +120,11 @@ elif source_type == "Видео":
                     st.sidebar.warning("Видео закончилось")
                     break
                 
-                # Твоя детекция
-                # Добавляем classes=target_classes, чтобы убрать телефоны
                 results = model.predict(frame, conf=confidence, classes=[1, 2, 3, 5, 7], verbose=False)
                 
                 res_frame = results[0].plot()
                 obj_count = len(results[0].boxes)
                 
-                # --- СОХРАНЯЕМ СТАТИСТИКУ В СЕССИЮ ---
-                # Сохраняем каждую секунду или каждый кадр (здесь каждый кадр)
                 timestamp = datetime.datetime.now().strftime("%H:%M:%S")
                 
                 # Считаем детали (велосипеды/машины)
@@ -144,7 +132,6 @@ elif source_type == "Видео":
                 n_bikes = int((cls_list == 1).sum()) # 1 - велосипед
                 n_cars = int((cls_list == 2).sum())  # 2 - машина
                 
-                # Добавляем в "память", чтобы данные выжили после нажатия Стоп
                 new_row = {"Время": timestamp, "Всего": obj_count, "Велосипеды": n_bikes, "Машины": n_cars}
                 st.session_state['video_stats'].append(new_row)
                 
@@ -166,10 +153,8 @@ elif source_type == "Видео":
         # Показываем таблицу
         st.dataframe(df_stats, use_container_width=True)
         
-        # График (бонус для отчета)
         st.line_chart(df_stats, x="Время", y=["Велосипеды", "Машины"])
         
-        # Кнопка очистки истории (если нужно начать заново)
         if st.button("Очистить историю"):
             st.session_state['video_stats'] = []
             st.rerun()
@@ -185,9 +170,8 @@ if st.button("Показать/Скачать историю"):
     df = pd.read_sql_query("SELECT * FROM history ORDER BY timestamp DESC", conn)
     conn.close()
     
-    st.dataframe(df) # Показать таблицу на экране
+    st.dataframe(df)
     
-    # Кнопка скачивания CSV (открывается в Excel)
     csv = df.to_csv(index=False).encode('utf-8')
     st.download_button(
         label="Скачать отчет (CSV/Excel)",
